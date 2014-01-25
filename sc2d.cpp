@@ -165,6 +165,115 @@ void initialize(const double NX, const double NY, const double rhoAvg,
     }
 }
 
+// streaming 
+void streaming(const double NX, const double NY,
+               double* ex, double* ey, double tau,
+               double* f, double* f_new, double* f_eq)
+{
+    for(int i = 0; i < NX-1; i++)
+    {                                                                                                 
+        for(int j = 0; j < NY-1; j++)
+        {                                                                                             
+            int N = i*NY + j;                                                                         
+            for(int id = 0; id < 9; id++)                                                             
+            {                                                                                         
+                int iflow = i + ex[id];                                                               
+                int jflow = j + ey[id];                                                               
+       
+                // periodic B.C.
+                if(iflow == -1) {iflow = NX-2;}                                                       
+                if(iflow == NX-1) {iflow = 0;}                                                        
+                if(jflow == -1) {jflow = NY-2;}                                                       
+                if(jflow == NY-1) {jflow = 0;}                                                        
+                                                                                                          
+                int Nflow = iflow*NY + jflow;                                                         
+           
+                int f_index_beg = 9*N + id;                                                           
+                int f_index_end = 9*Nflow + id;                                                       
+        
+                f_new[f_index_end] = f[f_index_beg]                                                   
+                                   - (f[f_index_beg] - f_eq[f_index_beg]) / tau;                      
+            }
+        }
+    }
+}
+
+void calc_dPdt(const double NX, const double NY, 
+               double* ex, double* ey, double* G11,
+               double* rho, double* dPdt_x, double* dPdt_y)
+{       
+    // interparticle forces
+    for(int i = 0; i < NX-1; i++)                                                                     
+    {
+        for(int j = 0; j < NY-1; j++)                                                                 
+        {                                                                                             
+            int N = i*NY + j;
+            double Gsumx = 0;
+            double Gsumy = 0;                                                                            
+            for(int id = 0; id < 9; id++)                                                             
+            {                                                                                         
+                int iflow = i + ex[id];                                                               
+                int jflow = j + ey[id];                                                               
+        
+                // periodic B.C.
+                if(iflow == -1) {iflow = NX-2;}                                                       
+                if(iflow == NX-1) {iflow = 0;}                                                        
+                if(jflow == -1) {jflow = NY-2;}                                                       
+                if(jflow == NY-1) {jflow = 0;}                                                        
+        
+                int Nflow = iflow*NY + jflow;                                                         
+        
+                Gsumx += psi(rho[N]) * psi(rho[Nflow]) * G11[id] * ex[id];                            
+                Gsumy += psi(rho[N]) * psi(rho[Nflow]) * G11[id] * ey[id];                            
+            }       
+            dPdt_x[N] = -Gsumx;                                                                       
+            dPdt_y[N] = -Gsumy;                                                                       
+        }
+    }
+}
+
+void updateDensityAndVelocity(const double NX, const double NY,
+                              double* ex, double* ey, double* wt, double tau,
+                              double* rho, double* u, double* v,
+                              double* dPdt_x, double* dPdt_y,
+                              double* f)
+{
+        // update density and velocity
+        for(int i = 0; i < NX-1; i++)
+        {  
+            for(int j = 0; j < NY-1; j++)
+            {  
+                int N = i*NY + j;
+                double f_sum = 0;
+                double fex_sum = 0;
+                double fey_sum = 0;
+                for(int id = 0; id < 9; id++)
+                {  
+                    f_sum += f[9*N + id];
+                    fex_sum += f[9*N + id]*ex[id];
+                    fey_sum += f[9*N + id]*ey[id];
+                }
+                rho[N] = f_sum;
+                u[N] = fex_sum / rho[N] + tau * dPdt_x[N] / rho[N];
+                v[N] = fey_sum / rho[N] + tau * dPdt_y[N] / rho[N];
+            }
+        }
+
+        // periodic B.C. for rho
+        for(int i = 0; i < NX-1; i++)
+        {  
+            int N_end = i*NY + (NY-1);
+            int N_beg = i*NY + 0;
+            rho[N_end] = rho[N_beg];
+        }
+        for(int j = 0; j < NY-1; j++)
+        {  
+            int N_end = (NX-1)*NY + j;
+            int N_beg = j;
+            rho[N_end] = rho[N_beg];
+        }
+}
+
 // main function
 int main(void)
 {
@@ -238,98 +347,11 @@ int main(void)
         // increment lattice time
         time++;
 
-        // streaming 
-                     
-        for(int i = 0; i < NX-1; i++)
-        {                                                                                                 
-            for(int j = 0; j < NY-1; j++)
-            {                                                                                             
-                int N = i*NY + j;                                                                         
-                for(int id = 0; id < 9; id++)                                                             
-                {                                                                                         
-                    int iflow = i + ex[id];                                                               
-                    int jflow = j + ey[id];                                                               
-       
-                    // periodic B.C.
-                    if(iflow == -1) {iflow = NX-2;}                                                       
-                    if(iflow == NX-1) {iflow = 0;}                                                        
-                    if(jflow == -1) {jflow = NY-2;}                                                       
-                    if(jflow == NY-1) {jflow = 0;}                                                        
-                                                                                                          
-                    int Nflow = iflow*NY + jflow;                                                         
-           
-                    int f_index_beg = 9*N + id;                                                           
-                    int f_index_end = 9*Nflow + id;                                                       
-        
-                    f_new[f_index_end] = f[f_index_beg]                                                   
-                                       - (f[f_index_beg] - f_eq[f_index_beg]) / tau;                      
-                }                                                                                         
-            }
-        }
-        
-        // interparticle forces acting on component 1                                                     
-        for(int i = 0; i < NX-1; i++)                                                                     
-        {
-            for(int j = 0; j < NY-1; j++)                                                                 
-            {                                                                                             
-                int N = i*NY + j;
-                double Gsumx = 0;
-                double Gsumy = 0;                                                                            
-                for(int id = 0; id < 9; id++)                                                             
-                {                                                                                         
-                    int iflow = i + ex[id];                                                               
-                    int jflow = j + ey[id];                                                               
-        
-                    // periodic B.C.
-                    if(iflow == -1) {iflow = NX-2;}                                                       
-                    if(iflow == NX-1) {iflow = 0;}                                                        
-                    if(jflow == -1) {jflow = NY-2;}                                                       
-                    if(jflow == NY-1) {jflow = 0;}                                                        
-        
-                    int Nflow = iflow*NY + jflow;                                                         
-        
-                    Gsumx += psi(rho[N]) * psi(rho[Nflow]) * G11[id] * ex[id];                            
-                    Gsumy += psi(rho[N]) * psi(rho[Nflow]) * G11[id] * ey[id];                            
-                }       
-                dPdt_x[N] = -Gsumx;                                                                       
-                dPdt_y[N] = -Gsumy;                                                                       
-            }
-        }
+        streaming(NX, NY, ex, ey, tau, f, f_new, f_eq);
 
-        // update density and velocity
-        for(int i = 0; i < NX-1; i++)
-        {  
-            for(int j = 0; j < NY-1; j++)
-            {  
-                int N = i*NY + j;
-                double f_sum = 0;
-                double fex_sum = 0;
-                double fey_sum = 0;
-                for(int id = 0; id < 9; id++)
-                {  
-                    f_sum += f[9*N + id];
-                    fex_sum += f[9*N + id]*ex[id];
-                    fey_sum += f[9*N + id]*ey[id];
-                }
-                rho[N] = f_sum;
-                u[N] = fex_sum / rho[N] + tau * dPdt_x[N] / rho[N];
-                v[N] = fey_sum / rho[N] + tau * dPdt_y[N] / rho[N];
-            }
-        }
+        calc_dPdt(NX, NY, ex, ey, G11, rho, dPdt_x, dPdt_y);
 
-        // periodic B.C. for rho
-        for(int i = 0; i < NX-1; i++)
-        {  
-            int N_end = i*NY + (NY-1);
-            int N_beg = i*NY + 0;
-            rho[N_end] = rho[N_beg];
-        }
-        for(int j = 0; j < NY-1; j++)
-        {  
-            int N_end = (NX-1)*NY + j;
-            int N_beg = j;
-            rho[N_end] = rho[N_beg];
-        }
+        updateDensityAndVelocity(NX, NY, ex, ey, wt, tau, rho, u, v, dPdt_x, dPdt_y, f);
 
         // update equilibrium functions
         for(int i = 0; i < NX-1; i++)
