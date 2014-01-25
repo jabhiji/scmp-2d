@@ -1,0 +1,3 @@
+This code implements the Shan & Chen (1993) model for single-component-multi-phase (SCMP) fluid. 
+The code is 2D and real-time visualization of the density field is carried out using OpenGL.
+The initial density field is a uniform rho = 1, with small and random perturbations.
