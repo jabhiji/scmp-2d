@@ -123,7 +123,7 @@ double psi(double x)
     return rho0 * (1 - pow(E, -x/rho0));
 }
 
-void initialize(const double NX, const double NY, const double rhoAvg,
+void initialize(const int NX, const int NY, const double rhoAvg,
                 double* ex, double* ey, double* wt,
                 double* rho, double* u, double* v,
                 double* f, double* f_new, double* f_eq)
@@ -166,7 +166,7 @@ void initialize(const double NX, const double NY, const double rhoAvg,
 }
 
 // streaming 
-void streaming(const double NX, const double NY,
+void streaming(const int NX, int double NY,
                double* ex, double* ey, double tau,
                double* f, double* f_new, double* f_eq)
 {
@@ -198,7 +198,7 @@ void streaming(const double NX, const double NY,
     }
 }
 
-void calc_dPdt(const double NX, const double NY, 
+void calc_dPdt(const int NX, const int NY, 
                double* ex, double* ey, double* G11,
                double* rho, double* dPdt_x, double* dPdt_y)
 {       
@@ -232,7 +232,7 @@ void calc_dPdt(const double NX, const double NY,
     }
 }
 
-void updateDensityAndVelocity(const double NX, const double NY,
+void updateDensityAndVelocity(const int NX, const int NY,
                               double* ex, double* ey, double* wt, double tau,
                               double* rho, double* u, double* v,
                               double* dPdt_x, double* dPdt_y,
@@ -279,8 +279,8 @@ int main(void)
 {
     // LBM parameters
 
-    const int NX = 128;         // number of lattice points
-    const int NY = 128;         // number of lattice points
+    const int NX = 12;         // number of lattice points
+    const int NY = 12;         // number of lattice points
     const double GEE11 = -0.45; // Shan & Chen parameter (controls density ratio)
     const double tau = 1.0;     // relaxation time
     const double rhoAvg = 0.693;  // reference density value
@@ -313,8 +313,8 @@ int main(void)
         return -1;
 
     // window size for displaying graphics
-    int WIDTH  = 300;
-    int HEIGHT = 300;
+    int WIDTH  = 800;
+    int HEIGHT = 800;
 
     // set the window's display mode
     window = glfwCreateWindow(WIDTH, HEIGHT, "2D SCMP Simulation", NULL, NULL);
