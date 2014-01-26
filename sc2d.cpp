@@ -48,23 +48,24 @@ void showGraphics(const int NX, const int NY, int WIDTH, int HEIGHT, double xmin
     float dx = (xmax - xmin)/WIDTH;
     float dy = (ymax - ymin)/HEIGHT;
 
-    // buffer used to store what we want to plot
-    // 2D array size is identical to the window size in pixels
-    float *scalar = new float[WIDTH*HEIGHT];
-
-    // scale factors
-    float min_rho = 0.1;   
-    float max_rho = 1.7; 
+    // find min and max rho values (for color map) 
+    float min_rho = 10.0;  
+    float max_rho = 0.0;
+    for(int k = 0; k < NX*NY; k++)
+    {
+        if(rho[k] > max_rho) max_rho = rho[k];
+        if(rho[k] < min_rho) min_rho = rho[k];
+    }
 
     // loop to fill the buffer that OpenGL will render
     // and assign an appropriate color to that pixel
-    for(int i = 0; i < WIDTH-1; i++) 
+    for(int i = 0; i < WIDTH; i++)
     {
-        for(int j = 0; j < HEIGHT-1; j++) 
+        for(int j = 0; j < HEIGHT; j++)
         {
             // map pixel coordinate (i,j) to LBM lattice coordinates (x,y)
-            int xin = i*NX/WIDTH;
-            int yin = j*NY/HEIGHT;
+            int xin = i*(NX-1)/(WIDTH-1);
+            int yin = j*(NY-1)/(HEIGHT-1);
 
             // get locations of 4 data points inside which this pixel lies
             int idx00 = (xin  )*NY+(yin  );   // point (0,0)
@@ -73,36 +74,37 @@ void showGraphics(const int NX, const int NY, int WIDTH, int HEIGHT, double xmin
             int idx11 = (xin+1)*NY+(yin+1);   // point (1,1)
 
             // calculate the normalized coordinates of the pixel
-            float xfl = (float)i * (float)NX / (float) WIDTH;
-            float yfl = (float)j * (float)NY / (float) HEIGHT;
+            float xfl = (float)i * (float)(NX-1) / (float) (WIDTH-1);
+            float yfl = (float)j * (float)(NY-1) / (float) (HEIGHT-1);
             float x = xfl - (float)xin;
             float y = yfl - (float)yin;
 
-            // bilinear interpolation
-            float rho_interp = rho[idx00]*(1.0 - x)*(1.0 - y) + rho[idx10] * x * (1.0 - y) + rho[idx01] * (1.0 - x) * y + rho[idx11] * x * y;
+            // bilinear interpolation to get rho value for pixel (i,j)
+            float rho_interp = rho[idx00] * (1.0 - x) * (1.0 - y) 
+                             + rho[idx10] *     x     * (1.0 - y) 
+                             + rho[idx01] * (1.0 - x) * y 
+                             + rho[idx11] *     x     * y;
 
-            // this is the value we want to plot at this pixel (should be in the range [0-1])
-            scalar[i*WIDTH + j] = (rho_interp - min_rho) / (max_rho - min_rho);                         // normalized density
+            // normalized rho (should be in the range [0-1])
+            float rho_norm = (rho_interp - min_rho) / (max_rho - min_rho);
 
-            float x_actual = xmin + i*dx;   // actual x coordinate
-            float y_actual = ymin + j*dy;   // actual y coordinate
-            float VAL = scalar[i*WIDTH + j];
+            float x_actual = xmin + i*dx;   // actual x coordinate of pixel bottom left
+            float y_actual = ymin + j*dy;   // actual y coordinate of pixel bottom left
 
-    //      printf("VAL = %f  ",VAL);
             float R, G, B;
 
-            if(VAL<=0.5)
+            if(rho_norm<=0.5)
             {
                 // yellow to blue transition
-                R = 2*VAL;
-                G = 2*VAL;
-                B = 1 - 2*VAL;
+                R = 2*rho_norm;
+                G = 2*rho_norm;
+                B = 1 - 2*rho_norm;
             }
             else
             {
                 // red to yellow transition
                 R = 1;
-                G = 2 - 2*VAL;
+                G = 2 - 2*rho_norm;
                 B = 0;
             }
 
@@ -111,9 +113,6 @@ void showGraphics(const int NX, const int NY, int WIDTH, int HEIGHT, double xmin
             glRectf (x_actual,y_actual,x_actual+dx,y_actual+dy);
         }
     }
-
-    // free memory
-    delete[] scalar;
 }
 
 double psi(double x)
@@ -166,7 +165,7 @@ void initialize(const int NX, const int NY, const double rhoAvg,
 }
 
 // streaming 
-void streaming(const int NX, int double NY,
+void streaming(const int NX, const int NY,
                double* ex, double* ey, double tau,
                double* f, double* f_new, double* f_eq)
 {
@@ -182,8 +181,8 @@ void streaming(const int NX, int double NY,
        
                 // periodic B.C.
                 if(iflow == -1) {iflow = NX-2;}                                                       
-                if(iflow == NX-1) {iflow = 0;}                                                        
                 if(jflow == -1) {jflow = NY-2;}                                                       
+                if(iflow == NX-1) {iflow = 0;}                                                        
                 if(jflow == NY-1) {jflow = 0;}                                                        
                                                                                                           
                 int Nflow = iflow*NY + jflow;                                                         
@@ -217,8 +216,8 @@ void calc_dPdt(const int NX, const int NY,
         
                 // periodic B.C.
                 if(iflow == -1) {iflow = NX-2;}                                                       
-                if(iflow == NX-1) {iflow = 0;}                                                        
                 if(jflow == -1) {jflow = NY-2;}                                                       
+                if(iflow == NX-1) {iflow = 0;}                                                        
                 if(jflow == NY-1) {jflow = 0;}                                                        
         
                 int Nflow = iflow*NY + jflow;                                                         
@@ -262,25 +261,70 @@ void updateDensityAndVelocity(const int NX, const int NY,
         // periodic B.C. for rho
         for(int i = 0; i < NX-1; i++)
         {  
-            int N_end = i*NY + (NY-1);
+            int j = NY-1; // top boundary
+            int N_end = i*NY + j;
             int N_beg = i*NY + 0;
             rho[N_end] = rho[N_beg];
         }
         for(int j = 0; j < NY-1; j++)
         {  
-            int N_end = (NX-1)*NY + j;
+            int i = NX-1; // right boundary
+            int N_end = i*NY + j;
             int N_beg = j;
             rho[N_end] = rho[N_beg];
         }
+        rho[NX*NY-1] = rho[0];
 }
 
 // main function
 int main(void)
 {
+    // lattice size
+
+    const int NX = 20;         // number of lattice points along X
+    const int NY = 20;         // number of lattice points along Y
+
+    // domain size in lattice units
+    // grid spacing is unity along X and Y
+
+    const double xmin = 0;
+    const double xmax = NX-1;
+    const double ymin = 0;
+    const double ymax = NY-1;
+
+    // example where NX = 8 and NY = 8
+    //
+    //
+    //  7 P-----P-----P-----P-----P-----P-----P-----P
+    //    |     |     |     |     |     |     |     |
+    //    |     |     |     |     |     |     |     |
+    //  6 *-----*-----*-----*-----*-----*-----*-----P
+    //    |     |     |     |     |     |     |     |
+    //    |     |     |     |     |     |     |     |
+    //  5 *-----*-----*-----*-----*-----*-----*-----P
+    //    |     |     |     |     |     |     |     |
+    //    |     |     |     |     |     |     |     |
+    //  4 *-----*-----*-----*-----*-----*-----*-----P
+    //    |     |     |     |     |     |     |     |
+    //    |     |     |     |     |     |     |     |
+    //  3 *-----*-----*-----*-----*-----*-----*-----P
+    //    |     |     |     |     |     |     |     |
+    //    |     |     |     |     |     |     |     |
+    //  2 *-----*-----*-----*-----*-----*-----*-----P
+    //    |     |     |     |     |     |     |     |
+    //    |     |     |     |     |     |     |     |
+    //  1 *-----*-----*-----*-----*-----*-----*-----P
+    //    |     |     |     |     |     |     |     |
+    //    |     |     |     |     |     |     |     |
+    //  0 *-----*-----*-----*-----*-----*-----*-----P
+    //    0     1     2     3     4     5     6     7
+    //
+    //
+    //    * = fields are calculated here
+    //    P = periodic boundary points
+
     // LBM parameters
 
-    const int NX = 12;         // number of lattice points
-    const int NY = 12;         // number of lattice points
     const double GEE11 = -0.45; // Shan & Chen parameter (controls density ratio)
     const double tau = 1.0;     // relaxation time
     const double rhoAvg = 0.693;  // reference density value
@@ -338,9 +382,6 @@ int main(void)
     //---------------------------------------
     // Loop until the user closes the window
     //---------------------------------------
-
-    // specify min and max window coordinates
-    double xmin = 0, xmax = NX, ymin = 0, ymax = NY;
 
     while(!glfwWindowShouldClose(window))
     {
