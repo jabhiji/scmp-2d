@@ -1,202 +1,239 @@
-// -----------------------------------------------------------------
-//  Simulation of Single Component Multiphase flow in 2D
+//    789012345678901234567890123456789012345678901234567890123456789012
+//    ------------------------------------------------------------------
+//    Simulation of Single Component Multiphase flow in 2D
 //
-//  Shan & Chen Model
+//    Shan & Chen Model
 //
-//  Periodic boundary conditions
+//    Periodic boundary conditions
 //
-//  Written by: Abhijit Joshi
-// -----------------------------------------------------------------
+//    Written by: Abhijit Joshi
+//    ------------------------------------------------------------------
 
-// OpenGL specific headers
+//    GLFW library header 
 
-#include <GLFW/glfw3.h>
+      #include <GLFW/glfw3.h>
 
-// the usual gang of C++ headers
+//    C++ headers
 
-#include <iostream>
-#include <cmath>
-#include <cstdlib>
-#include <ctime>        // clock_t, clock(), CLOCKS_PER_SEC
+      #include <iostream>     // cout()
+      #include <cmath>        // pow()
+      #include <ctime>        // clock_t, clock(), CLOCKS_PER_SEC
 
-// calculate pixel colors for the current graphics window, defined by the
-// minimum and maximum X and Y coordinates
+//    789012345678901234567890123456789012345678901234567890123456789012
+//    ------------------------------------------------------------------
+//    calculate pixel colors for the current graphics window
 
-void showGraphics(const int NX, const int NY, int WIDTH, int HEIGHT, double xmin, double xmax, double ymin, double ymax, const double *rho)
-{
-    //--------------------------------
-    //  OpenGL initialization stuff 
-    //--------------------------------
+      void showGraphics(const int NX, const int NY, 
+                        const int WIDTH, const int HEIGHT, 
+                        const double xmin, const double xmax, 
+                        const double ymin, const double ymax, 
+                        const double *rho)
+      {
+//      --------------------------------
+//        OpenGL initialization stuff 
+//      --------------------------------
 
-    // select background color to be white
-    // R = 1, G = 1, B = 1, alpha = 0
-    glClearColor (1.0, 1.0, 1.0, 0.0);
+//      select background color to be white
+//      R = 1, G = 1, B = 1, alpha = 0
 
-    // initialize viewing values
-    glMatrixMode(GL_PROJECTION);
+        glClearColor (1.0, 1.0, 1.0, 0.0);
 
-    // replace current matrix with the identity matrix
-    glLoadIdentity();
+//      initialize viewing values
 
-    // set clipping planes in the X-Y-Z coordinate system
-    glOrtho(xmin,xmax,ymin,ymax, -1.0, 1.0);
+        glMatrixMode(GL_PROJECTION);
 
-    // clear all pixels
-    glClear (GL_COLOR_BUFFER_BIT);
+//      replace current matrix with the identity matrix
 
-    // calculate pixel size (rectangle to be rendered)
-    float dx = (xmax - xmin)/WIDTH;
-    float dy = (ymax - ymin)/HEIGHT;
+        glLoadIdentity();
 
-    // find min and max rho values (for color map) 
-    float min_rho = 10.0;  
-    float max_rho = 0.0;
-    for(int k = 0; k < NX*NY; k++)
-    {
-        if(rho[k] > max_rho) max_rho = rho[k];
-        if(rho[k] < min_rho) min_rho = rho[k];
-    }
+//      set clipping planes in the X-Y-Z coordinate system
 
-    // loop to fill the buffer that OpenGL will render
-    // and assign an appropriate color to that pixel
-    for(int i = 0; i < WIDTH; i++)
-    {
-        for(int j = 0; j < HEIGHT; j++)
+        glOrtho(xmin,xmax,ymin,ymax, -1.0, 1.0);
+
+//      clear all pixels
+
+        glClear (GL_COLOR_BUFFER_BIT);
+
+//      calculate pixel size (rectangle to be rendered)
+
+        float dx = (xmax - xmin)/WIDTH;
+        float dy = (ymax - ymin)/HEIGHT;
+
+//      find min and max rho values (for color map)
+
+        float min_rho = 10.0;
+        float max_rho = 0.0;
+        for(int k = 0; k < NX*NY; k++)
         {
-            // map pixel coordinate (i,j) to LBM lattice coordinates (x,y)
+          if(rho[k] > max_rho) max_rho = rho[k];
+          if(rho[k] < min_rho) min_rho = rho[k];
+        }
+
+//      loop to fill the buffer that OpenGL will render
+//      and assign an appropriate color to that pixel
+
+        for(int i = 0; i < WIDTH; i++)
+        {
+          for(int j = 0; j < HEIGHT; j++)
+          {
+//          map pixel coordinate (i,j) to LBM lattice coordinates (x,y)
+
             int xin = i*(NX-1)/(WIDTH-1);
             int yin = j*(NY-1)/(HEIGHT-1);
 
-            // get locations of 4 data points inside which this pixel lies
+//          get locations of 4 data points inside which this pixel lies
+
             int idx00 = (xin  )*NY+(yin  );   // point (0,0)
             int idx10 = (xin+1)*NY+(yin  );   // point (1,0)
             int idx01 = (xin  )*NY+(yin+1);   // point (0,1)
             int idx11 = (xin+1)*NY+(yin+1);   // point (1,1)
 
-            // calculate the normalized coordinates of the pixel
+//          calculate the normalized coordinates of the pixel
+
             float xfl = (float)i * (float)(NX-1) / (float) (WIDTH-1);
             float yfl = (float)j * (float)(NY-1) / (float) (HEIGHT-1);
             float x = xfl - (float)xin;
             float y = yfl - (float)yin;
 
-            // bilinear interpolation to get rho value for pixel (i,j)
+//          bilinear interpolation to get rho value for pixel (i,j)
+
             float rho_interp = rho[idx00] * (1.0 - x) * (1.0 - y) 
                              + rho[idx10] *     x     * (1.0 - y) 
                              + rho[idx01] * (1.0 - x) * y 
                              + rho[idx11] *     x     * y;
 
-            // normalized rho (should be in the range [0-1])
-            float rho_norm = (rho_interp - min_rho) / (max_rho - min_rho);
+//          normalized rho (should be in the range [0-1])
 
-            float x_actual = xmin + i*dx;   // actual x coordinate of pixel bottom left
-            float y_actual = ymin + j*dy;   // actual y coordinate of pixel bottom left
+            float rho_norm = (rho_interp - min_rho) 
+                           / (max_rho    - min_rho);
+
+//          get coordinates of bottom-left corner of this pixel
+
+            float x_actual = xmin + i*dx;   // x coordinate
+            float y_actual = ymin + j*dy;   // y coordinate
 
             float R, G, B;
 
             if(rho_norm<=0.5)
             {
-                // yellow to blue transition
-                R = 2*rho_norm;
-                G = 2*rho_norm;
-                B = 1 - 2*rho_norm;
+//            yellow to blue transition
+
+              R = 2*rho_norm;
+              G = 2*rho_norm;
+              B = 1 - 2*rho_norm;
             }
             else
             {
-                // red to yellow transition
-                R = 1;
-                G = 2 - 2*rho_norm;
-                B = 0;
+//            red to yellow transition
+
+              R = 1;
+              G = 2 - 2*rho_norm;
+              B = 0;
             }
 
             // rendering the pixel with the appropriate color
+
             glColor3f(R,G,B);
             glRectf (x_actual,y_actual,x_actual+dx,y_actual+dy);
+          }
         }
-    }
-}
+      }
 
-double psi(double x)
-{
-    const double E = 2.71828;
-    const double rho0 = 1.0;
-    return rho0 * (1 - pow(E, -x/rho0));
-}
+//    789012345678901234567890123456789012345678901234567890123456789012
+//    ------------------------------------------------------------------
+//    funtion to calculate effective density in the Shan & Chen model
 
-void initialize(const int NX, const int NY, const double rhoAvg,
-                double* ex, double* ey, double* wt,
-                double* rho, double* u, double* v,
-                double* f, double* f_new, double* f_eq)
-{
-    // initialize density and velocity
-    // initialize random seed
-    srand (time(NULL));
+      double psi(double x)
+      {
+        const double E = 2.71828;
+        const double rho0 = 1.0;
+        return rho0 * (1 - pow(E, -x/rho0));
+      }
 
-    double rhoVar = 0.01 * rhoAvg;
-    for(int i = 0; i < NX; i++)
-    {
-        for(int j = 0; j < NY; j++)
+//    789012345678901234567890123456789012345678901234567890123456789012
+//    ------------------------------------------------------------------
+      void initialize(const int NX, const int NY, const double rhoAvg,
+                      double* ex, double* ey, double* wt,
+                      double* rho, double* u, double* v,
+                      double* f, double* f_new, double* f_eq)
+      {
+//      initialize random seed
+
+        srand (time(NULL));
+
+//      initialize density and velocity
+
+        double rhoVar = 0.01 * rhoAvg;
+        for(int i = 0; i < NX; i++)
         {
+          for(int j = 0; j < NY; j++)
+          {
             int N = i*NY + j;
             rho[N] = rhoAvg - 0.5*rhoVar + rhoVar * rand()/RAND_MAX;
             u[N] = 0.0;
             v[N] = 0.0;
+          }
         }
-    }
 
-    // initialize distribution functions to their equilibrium value
+//      initialize distribution functions to their equilibrium value
 
-    for(int i = 0; i < NX; i++)
-    {
-        for(int j = 0; j < NY; j++)
+        for(int i = 0; i < NX; i++)
         {
+          for(int j = 0; j < NY; j++)
+          {
             int N = i*NY + j;
             double udotu = u[N]*u[N] + v[N]*v[N];
 
             for(int id = 0; id < 9; id++)
             {
-                int index_f = 9*N + id;
-                double edotu = ex[id]*u[N] + ey[id]*v[N];
-                f_eq[index_f] = wt[id] * rho[N] * (1 + 3*edotu + 4.5*edotu*edotu - 1.5*udotu);
-                f[index_f] = f_eq[index_f];
-                f_new[index_f] = f_eq[index_f];
+              int index_f = 9*N + id;
+              double edotu = ex[id]*u[N] + ey[id]*v[N];
+              f_eq[index_f] = wt[id] * rho[N]
+                            * (1 + 3*edotu
+                                 + 4.5*edotu*edotu - 1.5*udotu);
+              f[index_f] = f_eq[index_f];
+              f_new[index_f] = f_eq[index_f];
             }
+          }
         }
-    }
-}
+      }
 
-// streaming 
-void streaming(const int NX, const int NY,
-               double* ex, double* ey, double tau,
-               double* f, double* f_new, double* f_eq)
-{
-    for(int i = 0; i < NX-1; i++)
-    {                                                                                                 
-        for(int j = 0; j < NY-1; j++)
-        {                                                                                             
-            int N = i*NY + j;                                                                         
-            for(int id = 0; id < 9; id++)                                                             
-            {                                                                                         
-                int iflow = i + ex[id];                                                               
-                int jflow = j + ey[id];                                                               
+//    789012345678901234567890123456789012345678901234567890123456789012
+//    ------------------------------------------------------------------
+      void streaming(const int NX, const int NY,
+                     double* ex, double* ey, double tau,
+                     double* f, double* f_new, double* f_eq)
+      {
+        for(int i = 0; i < NX-1; i++)
+        {
+          for(int j = 0; j < NY-1; j++)
+          {
+            int N = i*NY + j;
+            for(int id = 0; id < 9; id++)
+            {
+              int iflow = i + ex[id];
+              int jflow = j + ey[id];
        
-                // periodic B.C.
-                if(iflow == -1) {iflow = NX-2;}                                                       
-                if(jflow == -1) {jflow = NY-2;}                                                       
-                if(iflow == NX-1) {iflow = 0;}                                                        
-                if(jflow == NY-1) {jflow = 0;}                                                        
-                                                                                                          
-                int Nflow = iflow*NY + jflow;                                                         
-           
-                int f_index_beg = 9*N + id;                                                           
-                int f_index_end = 9*Nflow + id;                                                       
-        
-                f_new[f_index_end] = f[f_index_beg]                                                   
-                                   - (f[f_index_beg] - f_eq[f_index_beg]) / tau;                      
-            }
-        }
-    }
-}
+              // periodic B.C.
+              if(iflow == -1) {iflow = NX-2;}
+              if(jflow == -1) {jflow = NY-2;}
+              if(iflow == NX-1) {iflow = 0;}
+              if(jflow == NY-1) {jflow = 0;}
 
+              int Nflow = iflow*NY + jflow;
+              int f_index_beg = 9*N + id; 
+              int f_index_end = 9*Nflow + id;
+        
+              f_new[f_index_end] = f[f_index_beg]
+                                 - (f[f_index_beg] - f_eq[f_index_beg])
+                                 / tau;                      
+            }
+          }
+        }
+      }
+
+//    789012345678901234567890123456789012345678901234567890123456789012
+//    ------------------------------------------------------------------
 void calc_dPdt(const int NX, const int NY, 
                double* ex, double* ey, double* G11,
                double* rho, double* dPdt_x, double* dPdt_y)
@@ -281,8 +318,8 @@ int main(void)
 {
     // lattice size
 
-    const int NX = 20;         // number of lattice points along X
-    const int NY = 20;         // number of lattice points along Y
+    const int NX = 128;         // number of lattice points along X
+    const int NY = 128;         // number of lattice points along Y
 
     // domain size in lattice units
     // grid spacing is unity along X and Y
@@ -357,8 +394,8 @@ int main(void)
         return -1;
 
     // window size for displaying graphics
-    int WIDTH  = 800;
-    int HEIGHT = 800;
+    int WIDTH  = 400;
+    int HEIGHT = 400;
 
     // set the window's display mode
     window = glfwCreateWindow(WIDTH, HEIGHT, "2D SCMP Simulation", NULL, NULL);
@@ -432,10 +469,8 @@ int main(void)
 
         // calculate and print the number of lattice time-steps per second
         tN = clock() - t0;
-        std::cout << "Lattice time " << time 
-                  << " clock ticks " << tN 
-                  << " wall clock time " << tN/CLOCKS_PER_SEC 
-                  << " lattice time steps per second = " << (float) CLOCKS_PER_SEC * time / (float) tN 
+        std::cout << " lattice time steps per second = " 
+                  << (float) CLOCKS_PER_SEC * time / (float) tN 
                   << std::endl;
     }
 
