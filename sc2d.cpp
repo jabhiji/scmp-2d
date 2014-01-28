@@ -271,7 +271,8 @@
 //    789012345678901234567890123456789012345678901234567890123456789012
 //    ------------------------------------------------------------------
       void updateDensityAndVelocity(const int NX, const int NY,
-                                    double* ex, double* ey, double* wt,                                     double tau,
+                                    double* ex, double* ey, double* wt,
+                                    double tau,
                                     double* rho, double* u, double* v,
                                     double* dPdt_x, double* dPdt_y,
                                     double* f)
@@ -522,3 +523,5 @@
 
         return 0;
       }
+//    ------------------------------------------------------------------
+//    789012345678901234567890123456789012345678901234567890123456789012
