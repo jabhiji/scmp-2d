@@ -317,6 +317,32 @@
 
 //    789012345678901234567890123456789012345678901234567890123456789012
 //    ------------------------------------------------------------------
+      void updateEquilibrium(const int NX, const int NY,
+                             double* ex, double* ey, double* wt,
+                             const double* rho, 
+                             const double* u, const double* v,
+                             double* f_eq)
+      {
+        for(int i = 0; i < NX-1; i++)
+        {
+          for(int j = 0; j < NY-1; j++)
+          {
+            int N = i*NY + j;
+            double udotu = u[N]*u[N] + v[N]*v[N];
+            for(int id = 0; id < 9; id++)
+            {
+              int index_f = 9*N + id;
+              double edotu = ex[id]*u[N] + ey[id]*v[N];
+              f_eq[index_f] = wt[id] * rho[N] 
+                            * (1 + 3*edotu
+                                 + 4.5*edotu*edotu - 1.5*udotu);
+            }
+          }
+        }
+      }
+
+//    789012345678901234567890123456789012345678901234567890123456789012
+//    ------------------------------------------------------------------
       int main(void)
       {
 //      lattice size
@@ -446,48 +472,35 @@
           updateDensityAndVelocity(NX, NY, ex, ey, wt, tau, 
                                    rho, u, v, dPdt_x, dPdt_y, f);
 
-//        update equilibrium functions
-        for(int i = 0; i < NX-1; i++)
-        {
-            for(int j = 0; j < NY-1; j++)
-            {
-                int N = i*NY + j;
-                double udotu = u[N]*u[N] + v[N]*v[N];
+          updateEquilibrium(NX, NY, ex, ey, wt, rho, u, v, f_eq);
 
-                for(int id = 0; id < 9; id++)
-                {
-                    int index_f = 9*N + id;
-                    double edotu = ex[id]*u[N] + ey[id]*v[N];
-                    f_eq[index_f] = wt[id] * rho[N] * (1 + 3*edotu + 4.5*edotu*edotu - 1.5*udotu);
-                }
-            }
-        }
+//        transfer fnew back to f
 
-        // transfer fnew back to f
-
-        for(int f_index = 0; f_index < NX*NY*9; f_index++)
-        {
+          for(int f_index = 0; f_index < NX*NY*9; f_index++)
+          {
             f[f_index] = f_new[f_index];
+          }
+
+//        on-the-fly OpenGL graphics
+
+          if(time%10 == 0) 
+          {
+            showGraphics(NX, NY, WIDTH, HEIGHT, 
+                         xmin, xmax, ymin, ymax, rho);
+
+            glfwSwapBuffers(window); // swap front and back buffers
+
+            glfwPollEvents(); // poll for and processs events
+          }
+
+//        calculate the number of lattice time-steps per second
+
+          tN = clock() - t0;
+
+          std::cout << " lattice time steps per second = " 
+                    << (float) CLOCKS_PER_SEC * time / (float) tN 
+                    << std::endl;
         }
-
-          // on-the-fly OpenGL graphics
-        if(time%10 == 0) 
-        {
-            showGraphics(NX, NY, WIDTH, HEIGHT, xmin, xmax, ymin, ymax, rho);
-
-            // swap front and back buffers
-            glfwSwapBuffers(window);
-
-            // poll for and processs events
-            glfwPollEvents();
-        }
-
-        // calculate and print the number of lattice time-steps per second
-        tN = clock() - t0;
-        std::cout << " lattice time steps per second = " 
-                  << (float) CLOCKS_PER_SEC * time / (float) tN 
-                  << std::endl;
-    }
 
 //      clean up
 
