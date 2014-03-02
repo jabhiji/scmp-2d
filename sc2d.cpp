@@ -164,9 +164,9 @@
 //      initialize density and velocity
 
         double rhoVar = 0.01 * rhoAvg;
-        for(int i = 0; i < NX; i++)
+        for(int i = 0; i < NX-1; i++)
         {
-          for(int j = 0; j < NY; j++)
+          for(int j = 0; j < NY-1; j++)
           {
             int N = i*NY + j;
             rho[N] = rhoAvg - 0.5*rhoVar + rhoVar * rand()/RAND_MAX;
@@ -177,9 +177,9 @@
 
 //      initialize distribution functions to their equilibrium value
 
-        for(int i = 0; i < NX; i++)
+        for(int i = 0; i < NX-1; i++)
         {
-          for(int j = 0; j < NY; j++)
+          for(int j = 0; j < NY-1; j++)
           {
             int N = i*NY + j;
             double udotu = u[N]*u[N] + v[N]*v[N];
@@ -298,7 +298,7 @@
           }
         }
 
-        // periodic B.C. for rho
+        // periodic B.C. for rho (only used for plotting)
         for(int i = 0; i < NX-1; i++)
         {
           int j = NY-1; // top boundary
@@ -392,7 +392,7 @@
 
 //      LBM parameters
 
-        const double GEE11 = -0.45;   // interaction strength
+        const double GEE11 = -0.55;   // interaction strength
         const double tau = 1.0;       // relaxation time
         const double rhoAvg = 0.693;  // reference density value
 
@@ -403,7 +403,7 @@
         double wt[] = {4./9,1./9,1./9,1./9,1./9, 
                             1./36,1./36,1./36,1./36};
         double G11[] = {0,GEE11,GEE11,GEE11,GEE11,
-                          GEE11/2,GEE11/2,GEE11/2,GEE11/2};
+                          GEE11/4,GEE11/4,GEE11/4,GEE11/4};
 
 //      define buffers
 
@@ -411,7 +411,7 @@
         double *u      = new double[NX*NY]; // velocity x-component
         double *v      = new double[NX*NY]; // velocity y-component
         double *dPdt_x = new double[NX*NY]; // momentum change along x
-        double *dPdt_y = new double[NX*NY]; // momentum change along x
+        double *dPdt_y = new double[NX*NY]; // momentum change along y
         double *f      = new double[NX*NY*9]; // PDF
         double *f_eq   = new double[NX*NY*9]; // PDF
         double *f_new  = new double[NX*NY*9]; // PDF
@@ -452,6 +452,13 @@
                    &ex[0], &ey[0], &wt[0], 
                    rho, u, v, f, f_new, f_eq);
 
+        calc_dPdt(NX, NY, ex, ey, G11, rho, dPdt_x, dPdt_y);
+
+        updateDensityAndVelocity(NX, NY, ex, ey, wt, tau, 
+                                 rho, u, v, dPdt_x, dPdt_y, f_new);
+
+        updateEquilibrium(NX, NY, ex, ey, wt, rho, u, v, f_eq);
+
 //      time integration
 
         int time = 0;
@@ -470,8 +477,8 @@
 
           calc_dPdt(NX, NY, ex, ey, G11, rho, dPdt_x, dPdt_y);
 
-          updateDensityAndVelocity(NX, NY, ex, ey, wt, tau, 
-                                   rho, u, v, dPdt_x, dPdt_y, f);
+          updateDensityAndVelocity(NX, NY, ex, ey, wt, tau,
+                                   rho, u, v, dPdt_x, dPdt_y, f_new);
 
           updateEquilibrium(NX, NY, ex, ey, wt, rho, u, v, f_eq);
 
