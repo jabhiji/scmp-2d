@@ -2,7 +2,8 @@
 //    ------------------------------------------------------------------
 //    Simulation of Single Component Multiphase flow in 2D
 //
-//    Shan & Chen Model
+//    - Shan & Chen Model for interactive forces 
+//    - Kupershtokh & Medvedev Exact Difference Method
 //
 //    Periodic boundary conditions
 //
@@ -18,6 +19,7 @@
       #include <iostream>     // cout()
       #include <cmath>        // pow()
       #include <ctime>        // clock_t, clock(), CLOCKS_PER_SEC
+      #include <iomanip>      // setw
 
 //    789012345678901234567890123456789012345678901234567890123456789012
 //    ------------------------------------------------------------------
@@ -202,7 +204,7 @@
 //    ------------------------------------------------------------------
       void streaming(const int NX, const int NY,
                      double* ex, double* ey, double tau,
-                     double* f, double* f_new, double* f_eq)
+                     double* f, double* f_new, double* f_eq, double* f_eq_tilda)
       {
         for(int i = 0; i < NX-1; i++)
         {
@@ -225,8 +227,8 @@
               int f_index_end = 9*Nflow + id;
         
               f_new[f_index_end] = f[f_index_beg]
-                                 - (f[f_index_beg] - f_eq[f_index_beg])
-                                 / tau;                      
+                                 - (f[f_index_beg] - f_eq[f_index_beg]) / tau
+                                 + f_eq_tilda[f_index_beg] - f_eq[f_index_beg];
             }
           }
         }
@@ -275,9 +277,13 @@
                                     double tau,
                                     double* rho, double* u, double* v,
                                     double* dPdt_x, double* dPdt_y,
-                                    double* f)
+                                    double* f, 
+                                    float & rho_min,
+                                    float & rho_max)
       {
         // update density and velocity
+        rho_min = 1000.0;
+        rho_max = 0.0;
         for(int i = 0; i < NX-1; i++)
         {  
           for(int j = 0; j < NY-1; j++)
@@ -293,8 +299,10 @@
               fey_sum += f[9*N + id]*ey[id];
             }
             rho[N] = f_sum;
-            u[N] = fex_sum / rho[N] + tau * dPdt_x[N] / rho[N];
-            v[N] = fey_sum / rho[N] + tau * dPdt_y[N] / rho[N];
+            if (f_sum > rho_max) rho_max = (float) f_sum;
+            if (f_sum < rho_min) rho_min = (float) f_sum;
+            u[N] = fex_sum / rho[N];
+            v[N] = fey_sum / rho[N];
           }
         }
 
@@ -322,7 +330,8 @@
                              double* ex, double* ey, double* wt,
                              const double* rho, 
                              const double* u, const double* v,
-                             double* f_eq)
+                             const double* dPdt_x, const double* dPdt_y,
+                             double* f_eq, double* f_eq_tilda)
       {
         for(int i = 0; i < NX-1; i++)
         {
@@ -330,13 +339,21 @@
           {
             int N = i*NY + j;
             double udotu = u[N]*u[N] + v[N]*v[N];
+            double u_tilda = u[N] + dPdt_x[N] / rho[N];
+            double v_tilda = v[N] + dPdt_y[N] / rho[N];
+            double utilda_dot_utilda = u_tilda*u_tilda + v_tilda*v_tilda;
             for(int id = 0; id < 9; id++)
             {
               int index_f = 9*N + id;
               double edotu = ex[id]*u[N] + ey[id]*v[N];
+              double edotu_tilda = ex[id]*u_tilda + ey[id]*v_tilda;
               f_eq[index_f] = wt[id] * rho[N] 
                             * (1 + 3*edotu
                                  + 4.5*edotu*edotu - 1.5*udotu);
+              f_eq_tilda[index_f] = wt[id] * rho[N] 
+                            * (1 + 3*edotu_tilda
+                                 + 4.5*edotu_tilda*edotu_tilda
+                                 - 1.5*utilda_dot_utilda);
             }
           }
         }
@@ -393,7 +410,7 @@
 //      LBM parameters
 
         const double GEE11 = -0.55;   // interaction strength
-        const double tau = 1.0;       // relaxation time
+        const double tau = 0.7;       // relaxation time
         const double rhoAvg = 0.693;  // reference density value
 
 //      D2Q9 directions
@@ -407,14 +424,15 @@
 
 //      define buffers
 
-        double *rho    = new double[NX*NY]; // density
-        double *u      = new double[NX*NY]; // velocity x-component
-        double *v      = new double[NX*NY]; // velocity y-component
-        double *dPdt_x = new double[NX*NY]; // momentum change along x
-        double *dPdt_y = new double[NX*NY]; // momentum change along y
-        double *f      = new double[NX*NY*9]; // PDF
-        double *f_eq   = new double[NX*NY*9]; // PDF
-        double *f_new  = new double[NX*NY*9]; // PDF
+        double *rho        = new double[NX*NY]; // density
+        double *u          = new double[NX*NY]; // velocity x-component
+        double *v          = new double[NX*NY]; // velocity y-component
+        double *dPdt_x     = new double[NX*NY]; // momentum change along x
+        double *dPdt_y     = new double[NX*NY]; // momentum change along y
+        double *f          = new double[NX*NY*9]; // PDF
+        double *f_eq       = new double[NX*NY*9]; // PDF
+        double *f_new      = new double[NX*NY*9]; // PDF
+        double *f_eq_tilda = new double[NX*NY*9]; // PDF
 
 //      --------------------------------
 //         Create a WINDOW using GLFW
@@ -454,16 +472,21 @@
 
         calc_dPdt(NX, NY, ex, ey, G11, rho, dPdt_x, dPdt_y);
 
-        updateDensityAndVelocity(NX, NY, ex, ey, wt, tau, 
-                                 rho, u, v, dPdt_x, dPdt_y, f_new);
+        float rho_min, rho_max;
 
-        updateEquilibrium(NX, NY, ex, ey, wt, rho, u, v, f_eq);
+        updateDensityAndVelocity(NX, NY, ex, ey, wt, tau, 
+                                 rho, u, v, dPdt_x, dPdt_y, f_new,
+                                 rho_max, rho_max);
+
+        updateEquilibrium(NX, NY, ex, ey, wt, rho, u, v, 
+                          dPdt_x, dPdt_y, f_eq, f_eq_tilda);
 
 //      time integration
 
         int time = 0;
         clock_t t0, tN;
         t0 = clock();
+
 
         //---------------------------------------
         // Loop until the user closes the window
@@ -473,14 +496,16 @@
         {
           time++; // increment lattice time
 
-          streaming(NX, NY, ex, ey, tau, f, f_new, f_eq);
+          streaming(NX, NY, ex, ey, tau, f, f_new, f_eq, f_eq_tilda);
 
           calc_dPdt(NX, NY, ex, ey, G11, rho, dPdt_x, dPdt_y);
 
           updateDensityAndVelocity(NX, NY, ex, ey, wt, tau,
-                                   rho, u, v, dPdt_x, dPdt_y, f_new);
+                                   rho, u, v, dPdt_x, dPdt_y, f_new,
+                                   rho_min, rho_max);
 
-          updateEquilibrium(NX, NY, ex, ey, wt, rho, u, v, f_eq);
+          updateEquilibrium(NX, NY, ex, ey, wt, rho, u, v, 
+                            dPdt_x, dPdt_y, f_eq, f_eq_tilda);
 
 //        transfer fnew back to f
 
@@ -506,7 +531,18 @@
           tN = clock() - t0;
 
           std::cout << " lattice time steps per second = " 
-                    << (float) CLOCKS_PER_SEC * time / (float) tN 
+                    << std::setw(5)
+                    << (int) ((float) CLOCKS_PER_SEC * time / (float) tN)
+                    << std::setw(10)
+                    << " tau = " << tau
+                    << std::setw(10)
+                    << " GEE11 = " << GEE11
+                    << std::setw(10)
+                    << " min density = " << rho_min
+                    << std::setw(10)
+                    << " max density = " << rho_max
+                    << std::setw(10)
+                    << " density ratio = " << rho_max / rho_min
                     << std::endl;
         }
 
